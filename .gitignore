@@ -28,3 +28,5 @@ xtimesheet
 gladef.cpp
 gladef.h
 sm_splash.cpp
+.vscode
+*.txt
