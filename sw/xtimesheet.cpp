@@ -91,6 +91,28 @@ public:
 		reload();
 	}
 
+	char get_float_char() {
+		char buffer [4];
+		
+		sprintf (buffer, "%.1f", 0.0f);
+		return buffer[1];
+		// return retval;
+	}
+
+	void replace_char(char *line) {
+    	char * t; // first copy the pointer to not change the original
+    	int index = 0;
+		if (line != NULL) {
+			for (t = line; *t != '\0'; t++) {
+				if (*t == '.') {
+					*t = get_float_char();
+					break;
+				}
+				index++;
+			}
+    	}
+	}
+
 	void	reload(void) {
 		const	unsigned MXLEN=4096;
 		FILE		*fp;
@@ -104,7 +126,9 @@ public:
 		fp = fopen(m_fname, "r");
 		while(fgets(line, MXLEN, fp)) {
 			if (strncasecmp(line, "rate:", 5)==0) {
-				m_hourly_rate = atof(&line[5]);
+				char *rate = &line[5];
+				replace_char(rate);
+				m_hourly_rate = atof(rate);
 			} else if (strncasecmp(line, "project:", 8)==0) {
 				char	*ptr;
 				ptr = &line[8];
@@ -337,21 +361,106 @@ void	sig_handler(int v) {
 	ad->m_terminate_now = true;
 }
 
+void usage(void) {
+	fprintf(stderr, "USAGE:  xtimesheet <timesheet.txt>\n"
+"\tor\n"
+"\txtimesheet -p project_name -r rate\n\n"
+"\twhere:\n"
+"\t\t- timesheet.txt is the name of an existing textfile.\n "
+"\t\t\tThis file should have in it, as a minimum, a line beginning with 'Project: '\n"
+"\t\t\tthat specifies the project name, and a second line beginning with\n"
+"\t\t\t'Rate: ' that specifies an hourly rate for the project.\n"
+"\t\t- second command creates timesheet.txt file automatically\n"
+"\t\t\t-p project_name, where project name can be multiple words separated by space, e.g. \"test project\"\n"
+"\t\t\t-r rate, in decimal format, e.g. 33.3.\n"
+	);
+}
+
+char* get_file_extension(char* file_name) {
+  //store the position of last '.' in the file name
+  char *ptr = strrchr(file_name, '.');
+  if (ptr != NULL) {
+	return ++ptr;
+  }
+  return NULL;
+}
+
+void project_to_filename(char *file_name, char *proj, size_t len) {
+	// s = source index, d = destination index
+	size_t d=0;
+	for(size_t s=0; proj[s] != '\0' && d < len - 1; s++) {
+		if (isspace(proj[s]))
+			file_name[d++] = '_';
+		else if (isgraph(proj[s]))
+			file_name[d++] = tolower(proj[s]);
+	} 
+	file_name[d] = '\0';
+}
+
 int main(int argc, char **argv) {
+
 	Gtk::Main kit(argc, argv);
 	Glib::RefPtr<Gtk::Builder>	builder;
 	// Glib::Error		*error = NULL;
+	char file_name[255];
+	file_name[0] = '\0';
 
-	if ((argc < 2)||(argv[1][0]=='-')) {
-		fprintf(stderr, "USAGE: xtimesheet <timesheet.txt>\n"
-"\twhere timesheet.txt is the name of an existing textfile.  This file \n"
-"\tshould have in it, as a minimum, a line beginning with \'Project: \'\n"
-"\tthat specifies the project name, and a second line beginning with \n"
-"\t'Rate: ' that specifies an hourly rate for the project.\n");
+	if (argc == 5) {
+		//new project
+		if (strcasecmp(argv[1], "-p")==0 && strcasecmp(argv[3], "-r")==0) {
+			char *project_name = strdup(argv[2]);
+			if (strlen(project_name) > 250) {
+				fprintf(stderr, "WARNING: truncating filename to 250 characters.");
+			}
+
+			project_to_filename(file_name, project_name, 250);
+			strcat(file_name, ".txt");
+			if (access(file_name, R_OK)==0) { //check if file exists, throw error if true
+				fprintf(stderr, "ERROR: project file with name %s already exists\n\n", file_name);
+				usage();
+				exit(-1);
+			}
+			//validate rate
+			double r = atof(argv[4]);
+			if (r == 0.0) {
+				fprintf(stderr, "ERROR: rate %s is not valid\n", argv[4]);
+				usage();
+				exit(-1);
+			}
+			if (access(file_name, F_OK) == 0) { 
+				fprintf(stderr, "ERR: File %s already exists!  Cowardly refusing to overwrite it.\n", file_name);
+				exit(EXIT_FAILURE);
+			}
+			FILE *new_file = fopen(file_name, "w");
+			if (new_file == NULL) {
+				fprintf(stderr, "ERROR: unable to open file %s\n", file_name);
+				exit(-1);
+			}
+            fprintf(new_file, "Project: %s\n", argv[2]);
+			fprintf(new_file, "Rate: %s\n", argv[4]);
+			fclose(new_file);
+		} else {
+			usage();
+			exit(-1);
+		}
+	}
+
+	if ((argc < 2)||(strcasecmp(argv[1], "--help")==0)) {
+		usage();
 		exit(-1);
-	} else if ((strcasecmp(&argv[1][strlen(argv[1])-4], ".txt")==0)
-			&&(access(argv[1], W_OK)!=0)) {
-		fprintf(stderr, "ERROR: Cannot access %s\n", argv[1]);
+	} 
+	
+	if (strlen(file_name) == 0) {
+		strcpy(file_name, argv[1]);
+	}
+	char* ext = get_file_extension(file_name);
+	if (ext != NULL && strcasecmp(ext, "txt") != 0) {
+		fprintf(stderr, "ERROR: file name should end with .txt\n");
+		exit(-1);
+	}
+	if (access(file_name, W_OK)!=0) {
+		fprintf(stderr, "ERROR: Cannot access %s\n\n", file_name);
+		usage();
 		exit(-1);
 	}
 
@@ -368,10 +477,7 @@ int main(int argc, char **argv) {
 	/* Init GTK+ */
 	gtk_init(&argc, &argv);
 
-	/* Parse any remaining arguments */
-	for(int argn=1; argn<argc; argn++) {
-		ad->m_xts->load(argv[argn]);
-	}
+	ad->m_xts->load(file_name);
 
 	/* Create new GtkBuilder object */
 	/* Load UI from file.  If error occurs, report it and quit application.
