@@ -186,6 +186,7 @@ public:
 		m_hourlyrate = NULL;
 		m_working_btn= NULL;
 		m_daily_prg  = NULL;
+		m_terminate_now = false;
 	}
 
 	void	set_values(void) {
