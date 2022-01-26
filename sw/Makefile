@@ -1,7 +1,7 @@
 ################################################################################
 ##
 ## Filename: 	src/Makefile
-##
+## {{{
 ## Project:	Xtimesheet, a very simple text-based timesheet tracking program
 ##
 ## Purpose:	Keeps track of hours performed on a daily basis
@@ -10,9 +10,9 @@
 ##		Gisselquist Technology, LLC
 ##
 ################################################################################
-##
-## Copyright (C) 2017, Gisselquist Technology, LLC
-##
+## }}}
+## Copyright (C) 2017-2022, Gisselquist Technology, LLC
+## {{{
 ## This program is free software (firmware): you can redistribute it and/or
 ## modify it under the terms of  the GNU General Public License as published
 ## by the Free Software Foundation, either version 3 of the License, or (at
@@ -27,14 +27,14 @@
 ## with this program.  (It's in the $(ROOT)/doc directory.  Run make with no
 ## target there if the PDF file isn't present.)  If not, see
 ## <http://www.gnu.org/licenses/> for a copy.
-##
+## }}}
 ## License:	GPL, v3, as defined and found on www.gnu.org,
+## {{{
 ##		http://www.gnu.org/licenses/gpl.html
-##
 ##
 ################################################################################
 ##
-##
+## }}}
 all:
 ARCH	?= pc
 OBJDIR	:= obj-$(ARCH)
@@ -85,6 +85,7 @@ $(BINDIR)/totalhrs: $(OBJDIR)/totalhrs.o $(OBJDIR)/timecard.o
 $(BINDIR)/byday: $(OBJDIR)/byday.o $(OBJDIR)/timecard.o
 	$(mk-bindir)
 	$(CXX) $(LIBS) -o $@ $^ $(LIBS)
+$(OBJDIR)/xtimesheet.o: sm_splash.cpp gladef.h
 
 PKGLIBS := -Wl,-Bstatic -pthread -Wl,-Bstatic -lgtksourceviewmm-3.0 -lgtksourceview-3.0 -Wl,-E -lgtkmm-3.0 -latkmm-1.6 -lgdkmm-3.0 -lgiomm-2.4 -lpangomm-1.4 -lgtk-3 -lglibmm-2.4 -lcairomm-1.0 -Wl,-Bdynamic -lgdk-3 -latk-1.0 -lgio-2.0 -lpangocairo-1.0 -lgdk_pixbuf-2.0 -lcairo-gobject -lpango-1.0 -lcairo -lsigc-2.0 -lgobject-2.0 -lgmodule-2.0 -lglib-2.0
 ALTLIBS	= `pkg-config --libs gtksourceviewmm-3.0 gtk+-3.0 gtkmm-3.0 gmodule-2.0 gmodule-export-2.0`
@@ -100,9 +101,10 @@ $(BINDIR)/mkglade: $(OBJDIR)/mkglade.o
 	$(mk-bindir)
 	$(CXX) $^ -o $@
 
-gladef.cpp: timesheet.glade $(BINDIR)/mkglade
+gladef.h gladef.cpp: timesheet.glade $(BINDIR)/mkglade
 	$(mk-bindir)
 	$(BINDIR)/mkglade timesheet.glade gladef
+
 sm_splash.cpp: ../gfx/gt-sm-splash.png
 	gdk-pixbuf-csource --name=sm_splash ../gfx/gt-sm-splash.png > $@
 
@@ -132,6 +134,7 @@ tags: $(SOURCES) $(HEADERS)
 .PHONY: clean
 clean:
 	rm -f $(OBJDIR)/* $(BINDIR)/$(APP) sm_splash.cpp gladef.cpp gladef.h
+	rm -f $(BINDIR)/mkglade
 
 
 -include $(OBJDIR)/depends.txt

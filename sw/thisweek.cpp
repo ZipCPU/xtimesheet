@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
 // Filename: 	thisweek.cpp
-//
+// {{{
 // Project:	Xtimesheet, a very simple text-based timesheet tracking program
 //
 // Purpose:	To count up the hours put into a particular project over the
@@ -11,9 +11,9 @@
 //		Gisselquist Technology, LLC
 //
 ////////////////////////////////////////////////////////////////////////////////
-//
-// Copyright (C) 2017, Gisselquist Technology, LLC
-//
+// }}}
+// Copyright (C) 2017-2022, Gisselquist Technology, LLC
+// {{{
 // This program is free software (firmware): you can redistribute it and/or
 // modify it under the terms of  the GNU General Public License as published
 // by the Free Software Foundation, either version 3 of the License, or (at
@@ -28,14 +28,16 @@
 // with this program.  (It's in the $(ROOT)/doc directory, run make with no
 // target there if the PDF file isn't present.)  If not, see
 // <http://www.gnu.org/licenses/> for a copy.
-//
+// }}}
 // License:	GPL, v3, as defined and found on www.gnu.org,
+// {{{
 //		http://www.gnu.org/licenses/gpl.html
-//
 //
 ////////////////////////////////////////////////////////////////////////////////
 //
-//
+// }}}
+__attribute__((unused))
+static const char *cpyright = "(C) 2022 Gisselquist Technology, LLC: " __FILE__;
 #include <stdio.h>
 #include <time.h>
 

@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
 // Filename: 	xtimesheet.cpp
-//
+// {{{
 // Project:	Xtimesheet, a very simple text-based timesheet tracking program
 //
 // Purpose:	This is the main program for a GUI managing automatic
@@ -11,9 +11,9 @@
 //		Gisselquist Technology, LLC
 //
 ////////////////////////////////////////////////////////////////////////////////
-//
-// Copyright (C) 2017, Gisselquist Technology, LLC
-//
+// }}}
+// Copyright (C) 2017-2022, Gisselquist Technology, LLC
+// {{{
 // This program is free software (firmware): you can redistribute it and/or
 // modify it under the terms of  the GNU General Public License as published
 // by the Free Software Foundation, either version 3 of the License, or (at
@@ -28,17 +28,16 @@
 // with this program.  (It's in the $(ROOT)/doc directory, run make with no
 // target there if the PDF file isn't present.)  If not, see
 // <http://www.gnu.org/licenses/> for a copy.
-//
+// }}}
 // License:	GPL, v3, as defined and found on www.gnu.org,
+// {{{
 //		http://www.gnu.org/licenses/gpl.html
-//
 //
 ////////////////////////////////////////////////////////////////////////////////
 //
-//
+// }}}
 __attribute__((unused))
-static const char *cpyright = "(C) 2017 Gisselquist Technology, LLC: " __FILE__;
-
+static const char *cpyright = "(C) 2022 Gisselquist Technology, LLC: " __FILE__;
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -60,6 +59,7 @@ static const char *cpyright = "(C) 2017 Gisselquist Technology, LLC: " __FILE__;
 extern long	timezone; // seconds west of UTC
 
 class	XTIMESHEET : public TIMECARD {
+// {{{
 public:
 	time_t		m_last_start, m_today;
 	bool		m_currently_working;
@@ -67,6 +67,8 @@ public:
 	unsigned	m_sumunits, m_daily_s;
 	double		m_hourly_rate;
 
+	// XTIMESHEET
+	// {{{
 	XTIMESHEET(void) {
 		m_last_start = 0;
 		m_currently_working = false;
@@ -76,7 +78,10 @@ public:
 		m_sumunits = m_daily_s = 0;
 		m_hourly_rate = 225.0;
 	}
+	// }}}
 
+	// load
+	// {{{
 	void	load(const char *fname) {
 		m_hourly_rate = 225.0;
 
@@ -90,7 +95,10 @@ public:
 
 		reload();
 	}
+	// }}}
 
+	// get_float_char -- will be either '.' or ',', depending on locale
+	// {{{
 	char get_float_char() {
 		char buffer [4];
 		
@@ -98,10 +106,14 @@ public:
 		return buffer[1];
 		// return retval;
 	}
+	// }}}
 
+	// replace_char
+	// {{{
 	void replace_char(char *line) {
-    	char * t; // first copy the pointer to not change the original
-    	int index = 0;
+		char * t; // first copy the pointer to not change the original
+		int index = 0;
+
 		if (line != NULL) {
 			for (t = line; *t != '\0'; t++) {
 				if (*t == '.') {
@@ -110,9 +122,12 @@ public:
 				}
 				index++;
 			}
-    	}
+		}
 	}
+	// }}}
 
+	// reload
+	// {{{
 	void	reload(void) {
 		const	unsigned MXLEN=4096;
 		FILE		*fp;
@@ -165,7 +180,10 @@ public:
 
 		delete[] line;
 	}
+	// }}}
 
+	// toggle
+	// {{{
 	void	toggle(void) {
 		if (!m_currently_working) {
 			reload();
@@ -181,14 +199,17 @@ public:
 			m_last_start = 0;
 		}
 	}
+	// }}}
 
 	void	log(time_t t_start, time_t t_stop) {
 		TIMECARD::log(m_fname, t_start, t_stop);
 	}
 
 };
+// }}}
 
 class	APPDATA {
+// {{{
 public:
 	XTIMESHEET	*m_xts;
 	Gtk::ApplicationWindow	*m_xts_main;
@@ -199,6 +220,8 @@ public:
 	Gtk::Image		*m_splash;
 	bool			m_terminate_now;
 
+	// APPDATA
+	// {{{
 	APPDATA(void) {
 		m_xts        = NULL;
 		m_xts_main   = NULL;
@@ -212,7 +235,10 @@ public:
 		m_daily_prg  = NULL;
 		m_terminate_now = false;
 	}
+	// }}}
 
+	// set_values
+	// {{{
 	void	set_values(void) {
 		char	buf[128];
 		m_taskfile->set_text(m_xts->m_fname);
@@ -239,7 +265,10 @@ public:
 
 		m_splash->set(Gdk::Pixbuf::create_from_inline(sizeof(sm_splash), sm_splash));
 	}
+	// }}}
 
+	// tick -- count and record the time as it passes
+	// {{{
 	void	tick(void) {
 		char	buf[128];
 		time_t	daily_s = m_xts->m_daily_s;
@@ -286,7 +315,10 @@ public:
 			} else m_working_btn->set_label("Working");
 		}
 	}
+	// }}}
 
+	// on_toggle -- start or stop working
+	// {{{
 	void	on_toggle(void) {
 		m_xts->toggle();
 
@@ -302,16 +334,25 @@ public:
 
 		tick();
 	}
+	// }}}
 
+	// on_show
+	// {{{
 	void	on_show(void) {
 		set_values();
 	}
+	// }}}
 
+	// on_close
+	// {{{
 	bool	on_close(GdkEventAny *e) {
 		close();
 		return true;
 	}
+	// }}}
 
+	// close
+	// {{{
 	bool	close(void) {
 		// If we are currently working, then we should log our last
 		// working interval before closing.  Therefore, let's toggle
@@ -321,35 +362,49 @@ public:
 		gtk_main_quit();
 		return true;
 	}
+	// }}}
 
+	// load
+	// {{{
 	void	load(const char *fname) {
 		m_xts->load(fname);
 		set_values();
 	}
+	// }}}
 };
+// }}}
 
 extern "C" {
 	void	cb_on_toggle(GtkToggleButton *w, gpointer d);
 	gboolean	cb_on_close(GtkWidget *w, gpointer d);
 };
 
+// on_tick
+// {{{
 int	on_tick(APPDATA *ad) {
 	if (ad)
 		ad->tick();
 	return 1;
 }
+// }}}
 
+// cb_on_toggle
+// {{{
 void	cb_on_toggle(GtkToggleButton *w, gpointer d) {
 	// APPDATA *ad = (APPDATA *)d;
 	// ad->on_toggle();
 }
+// }}}
 
+// cb_on_close
+// {{{
 gboolean	cb_on_close(GtkWidget *w, gpointer d) {
 	// APPDATA *ad = (APPDATA *)d;
 	// ad->on_close();
 
 	return true;
 }
+// }}}
 
 // Catch a SIGTERM signal?
 // to shutdown accounting in case of a system crash?
@@ -361,6 +416,8 @@ void	sig_handler(int v) {
 	ad->m_terminate_now = true;
 }
 
+// usage
+// {{{
 void usage(void) {
 	fprintf(stderr, "USAGE:  xtimesheet <timesheet.txt>\n"
 "\tor\n"
@@ -375,7 +432,10 @@ void usage(void) {
 "\t\t\t-r rate, in decimal format, e.g. 33.3.\n"
 	);
 }
+// }}}
 
+// get_file_extension
+// {{{
 char* get_file_extension(char* file_name) {
   //store the position of last '.' in the file name
   char *ptr = strrchr(file_name, '.');
@@ -384,7 +444,10 @@ char* get_file_extension(char* file_name) {
   }
   return NULL;
 }
+// }}}
 
+// project_to_filename
+// {{{
 void project_to_filename(char *file_name, char *proj, size_t len) {
 	// s = source index, d = destination index
 	size_t d=0;
@@ -396,7 +459,10 @@ void project_to_filename(char *file_name, char *proj, size_t len) {
 	} 
 	file_name[d] = '\0';
 }
+// }}}
 
+// main
+// {{{
 int main(int argc, char **argv) {
 
 	Gtk::Main kit(argc, argv);
@@ -405,8 +471,8 @@ int main(int argc, char **argv) {
 	char file_name[255];
 	file_name[0] = '\0';
 
-	if (argc == 5) {
-		//new project
+	if (argc == 5) { //new project
+		// {{{
 		if (strcasecmp(argv[1], "-p")==0 && strcasecmp(argv[3], "-r")==0) {
 			char *project_name = strdup(argv[2]);
 			if (strlen(project_name) > 250) {
@@ -436,13 +502,14 @@ int main(int argc, char **argv) {
 				fprintf(stderr, "ERROR: unable to open file %s\n", file_name);
 				exit(-1);
 			}
-            fprintf(new_file, "Project: %s\n", argv[2]);
+			fprintf(new_file, "Project: %s\n", argv[2]);
 			fprintf(new_file, "Rate: %s\n", argv[4]);
 			fclose(new_file);
 		} else {
 			usage();
 			exit(-1);
 		}
+		// }}}
 	}
 
 	if ((argc < 2)||(strcasecmp(argv[1], "--help")==0)) {
@@ -532,5 +599,4 @@ int main(int argc, char **argv) {
 
 	return (0);
 }
-
-
+// }}}

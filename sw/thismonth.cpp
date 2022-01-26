@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
 // Filename: 	thismonth.cpp
-//
+// {{{
 // Project:	Xtimesheet, a very simple text-based timesheet tracking program
 //
 // Purpose:	To quickly count up the number of hours put into this particular
@@ -12,9 +12,9 @@
 //		Gisselquist Technology, LLC
 //
 ////////////////////////////////////////////////////////////////////////////////
-//
-// Copyright (C) 2017, Gisselquist Technology, LLC
-//
+// }}}
+// Copyright (C) 2017-2022, Gisselquist Technology, LLC
+// {{{
 // This program is free software (firmware): you can redistribute it and/or
 // modify it under the terms of  the GNU General Public License as published
 // by the Free Software Foundation, either version 3 of the License, or (at
@@ -29,14 +29,16 @@
 // with this program.  (It's in the $(ROOT)/doc directory, run make with no
 // target there if the PDF file isn't present.)  If not, see
 // <http://www.gnu.org/licenses/> for a copy.
-//
+// }}}
 // License:	GPL, v3, as defined and found on www.gnu.org,
+// {{{
 //		http://www.gnu.org/licenses/gpl.html
-//
 //
 ////////////////////////////////////////////////////////////////////////////////
 //
-//
+// }}}
+__attribute__((unused))
+static const char *cpyright = "(C) 2022 Gisselquist Technology, LLC: " __FILE__;
 #include <stdio.h>
 #include <time.h>
 
@@ -44,11 +46,20 @@
 
 #define	MXLEN	512
 
+void	usage(void) {
+	fprintf(stderr, "Usage: thismonth [month|[startdate enddate]] timesheet.txt [*]\n");
+}
+
 int main(int argc, char **argv) {
 	TIMECARD	tc;
 	time_t		midnight = 0, window_begin = 0, window_end = 0,
 			acc = 0;
 	char	line[MXLEN];
+
+	if (argc <= 1) {
+		usage();
+		exit(EXIT_SUCCESS);
+	}
 
 	{
 		time_t	when;
@@ -88,7 +99,7 @@ int main(int argc, char **argv) {
 					} else {
 						struct tm	datev;
 						localtime_r(&lnstop, &datev);
-						printf("%04d/%02d/%02d is outside of our window\n", datev.tm_year+1900, datev.tm_mon+1, datev.tm_mday);
+//						printf("%04d/%02d/%02d is outside of our window\n", datev.tm_year+1900, datev.tm_mon+1, datev.tm_mday);
 					}
 				}
 			}
@@ -123,6 +134,9 @@ int main(int argc, char **argv) {
 			localtime_r(&window_end, &datev);
 			printf("Month ends: %04d/%02d/%02d\n",
 			datev.tm_year+1900, datev.tm_mon+1, datev.tm_mday);
+
+			if (acc != 0)
+				fprintf(stderr, "WARNING: times updated after hours already calculated\n");
 		}
 	}
 
