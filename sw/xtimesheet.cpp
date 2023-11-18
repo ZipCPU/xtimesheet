@@ -40,6 +40,7 @@ __attribute__((unused))
 static const char *cpyright = "(C) 2022 Gisselquist Technology, LLC: " __FILE__;
 
 #include <stdio.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
@@ -49,6 +50,10 @@ static const char *cpyright = "(C) 2022 Gisselquist Technology, LLC: " __FILE__;
 #include <assert.h>
 #include <signal.h>
 
+#include <string>
+#include <unordered_map>
+#include <iostream>
+
 #include <gtk/gtk.h>
 #include <gtkmm.h>
 
@@ -57,6 +62,45 @@ static const char *cpyright = "(C) 2022 Gisselquist Technology, LLC: " __FILE__;
 #include "timecard.h"
 
 extern long	timezone; // seconds west of UTC
+
+typedef	std::string		STRING;
+typedef	std::unordered_map<STRING,STRING> TASKTBL;
+typedef	std::pair<STRING,STRING> TBLVALUE;
+typedef	TASKTBL::iterator	TBLINDEX;
+
+TASKTBL	task_tbl;
+
+// #define	DBGPRINTF	printf
+#define	DBGPRINTF	null
+static	void	null(...) {}
+
+void	tbl_register_fname(const char *choice, const char *fname) {
+	// {{{
+	TBLINDEX	last;
+	STRING		s_choice(choice), s_fname(fname);
+
+	last = task_tbl.find(s_choice);
+	if (last == task_tbl.end()) {
+		task_tbl.insert(TBLVALUE(s_choice, s_fname));
+		return;
+	}
+
+	if (last->second.compare(fname) != 0)
+		last->second = s_fname;
+}
+// }}}
+
+const char *tbl_lookup_fname(const char *choice) {
+	// {{{
+	STRING	ch;
+	TBLINDEX	idx;
+
+	idx = task_tbl.find(STRING(choice));
+	if (idx == task_tbl.end())
+		return NULL;
+	return idx->second.c_str();
+}
+// }}}
 
 class	XTIMESHEET : public TIMECARD {
 // {{{
@@ -157,6 +201,7 @@ public:
 					while(isspace(m_name[strlen(m_name)-1]))
 						m_name[strlen(m_name)-1]='\0';
 				}
+				tbl_register_fname(m_name, m_fname);
 			} else if (parse(line, lnstart, lnstop)) {
 				time_t		midnight;
 				if (lnstart > 24*3600) {
@@ -190,6 +235,7 @@ public:
 
 			m_currently_working = true;
 			time(&m_last_start);
+			TIMECARD::note_start(m_fname, m_last_start);
 		} else {
 			time_t	now = time(NULL);
 			log(m_last_start, now);
@@ -210,10 +256,21 @@ public:
 
 class	APPDATA {
 // {{{
+protected:
+	typedef	Glib::RefPtr<Gtk::ListStore>	TSKMODEL;
+
+	TSKMODEL	list_model(void) {
+		// {{{
+		return TSKMODEL::cast_dynamic( m_taskchoice->get_model());
+	}
+	// }}}
+
 public:
 	XTIMESHEET	*m_xts;
 	Gtk::ApplicationWindow	*m_xts_main;
-	Gtk::Entry		*m_taskname, *m_taskfile, *m_totalcost, *m_today,
+	Gtk::ComboBoxText	*m_taskchoice;
+	Gtk::FileChooserButton	*m_taskfile;
+	Gtk::Entry		*m_totalcost, *m_today,
 				*m_sumhours, *m_hourlyrate;
 	Gtk::ToggleButton	*m_working_btn;
 	Gtk::ProgressBar	*m_daily_prg;
@@ -225,7 +282,7 @@ public:
 	APPDATA(void) {
 		m_xts        = NULL;
 		m_xts_main   = NULL;
-		m_taskname   = NULL;
+		m_taskchoice = NULL;
 		m_taskfile   = NULL;
 		m_totalcost  = NULL;
 		m_today      = NULL;
@@ -241,25 +298,75 @@ public:
 	// {{{
 	void	set_values(void) {
 		char	buf[128];
-		m_taskfile->set_text(m_xts->m_fname);
-		if (m_xts->m_name)
-			m_taskname->set_text(m_xts->m_name);
-		else
-			m_taskname->set_text("No name");
 
-		sprintf(buf, "$ %.2f", m_xts->m_hourly_rate);
-		m_hourlyrate->set_text(buf);
+		DBGPRINTF("SET-VALUES\n");
+		m_taskfile->set_title("Select a timecard");
+		if (m_xts && m_xts->m_fname && m_xts->m_fname[0]) {
+			TSKMODEL	model;
+			Gtk::TreeModel::iterator p, here;
 
-		sprintf(buf, "%.1f", (m_xts->m_sumunits+((m_xts->m_daily_s+180)/360)) / 10.0);
-		m_sumhours->set_text(buf);
+			DBGPRINTF("\tSetting filename to %s\n", m_xts->m_fname);
+			m_taskfile->set_filename(m_xts->m_fname);
 
-		double	 v = m_xts->m_sumunits * m_xts->m_hourly_rate / 10.0;
-		sprintf(buf, "%.2f", v);
-		m_totalcost->set_text(buf);
+			model = list_model();
+			p = model->children().begin();
+			here = m_taskchoice->get_active();
 
-		v = m_xts->m_daily_s / 3600.0;
-		sprintf(buf, "%.1f", v);
-		m_today->set_text(buf);
+			p = model->children().begin();
+
+			if (!model->iter_is_valid(p)) {
+				DBGPRINTF("\tADDING.1 \"%s\"\n", m_xts->m_name);
+				m_taskchoice->prepend(strdup(m_xts->m_name));
+				m_taskchoice->set_active(0);
+			} else if (model->iter_is_valid(here) && here == p
+				&& m_xts && m_xts->m_name && m_xts->m_name[0]
+				&& m_taskchoice->get_active_text().compare(
+						m_xts->m_name)==0) {
+				// Already active, no action required
+				DBGPRINTF("\tADDING.2: No action\n");
+				// m_taskchoice->set_active(0);
+			} else {
+				bool	found = false;
+				// Our task isn't active yet
+
+				// p = model->children().begin();
+				for(; model->iter_is_valid(p) && p; p++) {
+					Glib::ustring	this_text;
+					p->get_value(0, this_text);
+					DBGPRINTF("\tADDING.3: this_text = %s\n", this_text.c_str());
+					if (this_text == m_xts->m_name) {
+						if (found) {
+							DBGPRINTF("\tADDING.3: Removing \"%s\"\n", this_text.c_str());
+							p = model->erase(p);
+						} else {
+							m_taskchoice->set_active(p);
+							found = true;
+						}
+					}
+				}
+
+				if (!found) {
+					DBGPRINTF("\tADDING.4 %s\n", m_xts->m_name);
+					m_taskchoice->prepend(strdup(m_xts->m_name));
+					m_taskchoice->set_active(0);
+				}
+			}
+
+			sprintf(buf, "$ %.2f", m_xts->m_hourly_rate);
+			m_hourlyrate->set_text(buf);
+
+			sprintf(buf, "%.1f", (m_xts->m_sumunits+((m_xts->m_daily_s+180)/360)) / 10.0);
+			m_sumhours->set_text(buf);
+
+			double	 v = m_xts->m_sumunits * m_xts->m_hourly_rate / 10.0;
+			sprintf(buf, "%.2f", v);
+			m_totalcost->set_text(buf);
+
+			v = m_xts->m_daily_s / 3600.0;
+			sprintf(buf, "%.1f", v);
+			m_today->set_text(buf);
+		} else
+			m_taskfile->set_title("Select a timecard");
 
 		tick();
 
@@ -317,9 +424,70 @@ public:
 	}
 	// }}}
 
+	// on_select -- switch tasks
+	// {{{
+	void	on_select(void) {
+		bool		working = m_xts->m_currently_working;
+		const	char	*fname;
+		Glib::ustring	taskname;
+
+		DBGPRINTF("APP:ON-SELECT");
+		taskname = m_taskchoice->get_active_text();
+		DBGPRINTF(" -- %s", taskname.c_str());
+
+		if (m_xts && m_xts->m_name && m_xts->m_name[0]
+				&& taskname.compare(m_xts->m_name)==0) {
+			// User selected the currently selected task
+			return;
+		}
+
+		fname = tbl_lookup_fname(taskname.c_str());
+		if (!fname || !fname[0]) {
+			DBGPRINTF("ON-SELECT: No file found (yet)\n");
+			if (list_model()->iter_is_valid(list_model()->children().begin()))
+				m_taskchoice->set_active(0);
+			return;
+		} if (m_xts->m_fname && m_xts->m_fname[0]
+				&& strcmp(fname, m_xts->m_fname)==0) {
+			DBGPRINTF("Task already loaded and active\n");
+			return;
+		}
+
+		if (working) {
+			// Stop the time card, write a close task to it
+			m_xts->toggle();
+		}
+
+
+		DBGPRINTF("Loading: %s\n", fname);
+		load(fname);
+
+		if (working) {
+			// Restart, now under the new time card
+			m_xts->toggle();
+		}
+
+		// Re-sort to make this item the "top" or #1 item
+		TSKMODEL	model = list_model();
+		Gtk::TreeModel::iterator p = m_taskchoice->get_active(),
+				first = model->children().begin();
+		if (model->iter_is_valid(p)
+				&& model->iter_is_valid(first)
+				&& (p != first)) {
+			DBGPRINTF("... choice swap\n");
+			model->iter_swap(first, p);
+			// model->erase(p);
+			// m_taskchoice->prepend(m_xts->m_name);
+			m_taskchoice->set_active(0);
+			
+		}
+	}
+	// }}}
+
 	// on_toggle -- start or stop working
 	// {{{
 	void	on_toggle(void) {
+		DBGPRINTF("APP:ON-TOGGLE\n");
 		m_xts->toggle();
 
 		if (m_xts->m_currently_working) {
@@ -339,6 +507,7 @@ public:
 	// on_show
 	// {{{
 	void	on_show(void) {
+		DBGPRINTF("ON-SHOW, set_values()\n");
 		set_values();
 	}
 	// }}}
@@ -348,6 +517,38 @@ public:
 	bool	on_close(GdkEventAny *e) {
 		close();
 		return true;
+	}
+	// }}}
+
+	// on_newfile
+	// {{{
+	void	on_newfile(void) {
+		const char	 *new_fname;
+		char		cbuf[64];
+		const	char	PATTERN[] = "Project:";
+		const unsigned	nP = strlen(PATTERN);
+		FILE	*ftmp;
+		Glib::ustring	aux, cvt;
+
+		aux = m_taskfile->get_filename();
+		aux = Glib::filename_to_utf8(aux);
+		new_fname = aux.c_str();
+
+		DBGPRINTF("NEW-FILE: %s\n", new_fname);
+		if (0 != access(new_fname, W_OK)) {
+			fprintf(stderr, "%s cannot be read\n", new_fname);
+		} else if (NULL == (ftmp = fopen(new_fname, "r"))) {
+			fprintf(stderr, "%s cannot be read\n", new_fname);
+		} else if (nP != fread(cbuf, sizeof(char), nP, ftmp)) { 
+			fclose(ftmp);
+			fprintf(stderr, "%s is not a valid time card\n", new_fname);
+		} else if (0 != strncasecmp(cbuf, PATTERN, strlen(PATTERN))) {
+			fclose(ftmp);
+			fprintf(stderr, "%s is not a valid time card\n", new_fname);
+		} else {
+			fclose(ftmp);
+			load(new_fname);
+		}
 	}
 	// }}}
 
@@ -364,10 +565,71 @@ public:
 	}
 	// }}}
 
+	void	read_config(void) {
+		// {{{
+		char	cfg_file[PATH_MAX+2], *home, cfg_task[PATH_MAX],
+			prefix[PATH_MAX], *tsk_name;
+		FILE	*fcfg = NULL, *ftsk;
+
+// printf("READ-CONFIG\n");
+		home = getenv("HOME");
+		if (!home)
+			return;
+
+// printf("READ-CONFIG: home = %s\n", home);
+
+		strcpy(cfg_file, home);
+		strcat(cfg_file, "/.xtimesheet");
+		fcfg = fopen(cfg_file, "r");
+		if (!fcfg)
+			return;
+
+// printf("READ-CONFIG: cfg_file = %s\n", cfg_file);
+
+		while(fgets(cfg_task, sizeof(cfg_task), fcfg)) {
+			char	*tsk_file = cfg_task, *endp;
+
+			endp = &cfg_task[strlen(cfg_task)-1];
+			while(endp > cfg_task && isspace(*endp))
+				*endp-- = '\0';
+			while(*tsk_file && isspace(*tsk_file))
+				tsk_file++;
+			if (tsk_file[0] == '#' || tsk_file[0] == '*')
+				continue;
+			if (tsk_file[0] == '/' && tsk_file[1] == '/')
+				continue;
+
+			ftsk = NULL;
+			if (0 != access(tsk_file, R_OK))
+				continue;
+			if (NULL == (ftsk=fopen(tsk_file,"r")))
+				continue;
+
+			if ((fgets(prefix,sizeof(prefix), ftsk))
+				&&(0==strncasecmp(prefix, "project:", 8))) {
+				tsk_name = prefix+8;
+				while(*tsk_name && isspace(*tsk_name))
+					tsk_name++;
+				endp = &tsk_name[strlen(tsk_name)-1];
+				while(tsk_name < endp && isspace(*endp))
+					*endp-- = '\0';
+				if (endp > tsk_name) {
+					tbl_register_fname(tsk_name, cfg_task);
+					m_taskchoice->append(strdup(tsk_name));
+				}
+			} fclose(ftsk);
+		}
+
+		fclose(fcfg);
+	}
+	// }}}
+
 	// load
 	// {{{
 	void	load(const char *fname) {
+		DBGPRINTF("LOAD()::CALLING LOAD: %s\n", fname);
 		m_xts->load(fname);
+		DBGPRINTF("LOAD()::CALLING LOAD::SET-VALUES\n");
 		set_values();
 	}
 	// }}}
@@ -391,6 +653,7 @@ int	on_tick(APPDATA *ad) {
 // cb_on_toggle
 // {{{
 void	cb_on_toggle(GtkToggleButton *w, gpointer d) {
+stderr, printf("ON-TOGGLE\n");
 	// APPDATA *ad = (APPDATA *)d;
 	// ad->on_toggle();
 }
@@ -468,7 +731,7 @@ int main(int argc, char **argv) {
 	Gtk::Main kit(argc, argv);
 	Glib::RefPtr<Gtk::Builder>	builder;
 	// Glib::Error		*error = NULL;
-	char file_name[255];
+	char file_name[PATH_MAX];
 	file_name[0] = '\0';
 
 	if (argc == 5) { //new project
@@ -544,6 +807,11 @@ int main(int argc, char **argv) {
 	/* Init GTK+ */
 	gtk_init(&argc, &argv);
 
+	if (file_name) {
+		char	full_path[PATH_MAX];
+		realpath(file_name, full_path);
+		strcpy(file_name, full_path);
+	}
 	ad->m_xts->load(file_name);
 
 	/* Create new GtkBuilder object */
@@ -556,7 +824,7 @@ int main(int argc, char **argv) {
 
 	/* Get widget pointers from UI */
 	builder->get_widget("xts_main",    ad->m_xts_main);
-	builder->get_widget("taskname",    ad->m_taskname);
+	builder->get_widget("taskchoice",  ad->m_taskchoice);
 	builder->get_widget("taskfile",    ad->m_taskfile);
 	builder->get_widget("totalcost",   ad->m_totalcost);
 	builder->get_widget("today",       ad->m_today);
@@ -571,9 +839,18 @@ int main(int argc, char **argv) {
 	ad->m_working_btn->signal_toggled().connect(sigc::mem_fun(ad, &APPDATA::on_toggle));
 	ad->m_xts_main->signal_delete_event().connect(sigc::mem_fun(ad, &APPDATA::on_close));
 	ad->m_xts_main->signal_show().connect(sigc::mem_fun(ad, &APPDATA::on_show));
+	ad->m_taskchoice->signal_changed().connect(sigc::mem_fun(ad, &APPDATA::on_select));
+	ad->m_taskfile->signal_file_set().connect(sigc::mem_fun(ad, &APPDATA::on_newfile));
 
 	// Set the image value
 	ad->m_splash->set(Gdk::Pixbuf::create_from_inline(sizeof(sm_splash), sm_splash));
+
+	// Clear our task choices
+	ad->m_taskchoice->remove_all();
+
+	// Add all task choices found in the ~/.xtimesheet file
+	ad->read_config();
+
 	/* Destroy builder, since we don't need it anymore */
 	// g_object_unref( G_OBJECT( builder ));
 	// delete builder;

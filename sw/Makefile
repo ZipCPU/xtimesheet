@@ -70,6 +70,13 @@ $(OBJDIR)/%.o: %.cpp
 	$(mk-objdir)
 	$(CXX) $(CFLAGS) -c $< -o $@
 
+.PHONY: xtimesheet thisweek thismonth totalhrs byday
+xtimesheet: $(BINDIR)/xtimesheet
+thisweek: $(BINDIR)/thisweek
+thismonth: $(BINDIR)/thismonth
+totalhrs: $(BINDIR)/totalhrs
+byday: $(BINDIR)/byday
+
 $(BINDIR)/$(APP):	$(OBJECTS)
 	$(mk-bindir)
 	$(CXX) $(LIBS) -o $@ $^ $(LIBS)
@@ -94,14 +101,16 @@ $(BINDIR)/$(APP)-static:	$(OBJECTS)
 	$(CXX) $(PKGLIBS) -o $@ $^ $(LIBS)
 
 $(OBJDIR)/mkglade.o: mkglade.cpp
-	$(mk-bindir)
+	$(mk-objdir)
 	$(CXX) -c -g mkglade.cpp -o $@
 
+.PHONY: mkglade
+mkglade: $(BINDIR)/mkglade
 $(BINDIR)/mkglade: $(OBJDIR)/mkglade.o
 	$(mk-bindir)
 	$(CXX) $^ -o $@
 
-gladef.h gladef.cpp: timesheet.glade $(BINDIR)/mkglade
+gladef.cpp: timesheet.glade $(BINDIR)/mkglade
 	$(mk-bindir)
 	$(BINDIR)/mkglade timesheet.glade gladef
 
@@ -118,6 +127,7 @@ endef
 
 define	build-depends
 	@echo "Buidling dependency file"
+	$(mk-objdir)
 	$(CXX) $(CFLAGS) -MM $(SOURCES) > $(OBJDIR)/xdep.txt
 	$(SED) -e 's/^.*.o: /$(OBJDIR)\/&/' < $(OBJDIR)/xdep.txt > $(OBJDIR)/depends.txt
 endef

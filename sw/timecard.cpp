@@ -286,4 +286,19 @@ void	TIMECARD::log(const char *fname, time_t t_start, time_t t_stop) {
 	fclose(fp);
 }
 
+void	TIMECARD::note_start(const char *fname, time_t t_start) {
+	FILE	*fp;
+	struct	tm	tp_start;
+
+	localtime_r(&t_start, &tp_start);
+	fp = fopen(fname, "a");
+
+	fprintf(fp, "%04d/%02d/%02d %02d%02d%02d -- Start\n",
+		tp_start.tm_year+1900, tp_start.tm_mon+1,
+		tp_start.tm_mday,
+		tp_start.tm_hour, tp_start.tm_min, tp_start.tm_sec);
+
+	fclose(fp);
+}
+
 

@@ -55,6 +55,7 @@ public:
 
 	bool	parse(const char *line, time_t &lnstart, time_t &lnstop);
 	void	log(const char *fname, time_t t_start, time_t t_stop);
+	void	note_start(const char *fname, time_t t_start);
 	time_t	get_midnight(const char *ln);
 	time_t	get_midnight(time_t when);
 	bool	digitstr(const char *str, int len);
