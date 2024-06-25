@@ -1,10 +1,10 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Filename:	sw/byday.cpp
+// Filename:	sw/bymonth.cpp
 //
 // Project:	Xtimesheet, a very simple text-based timesheet tracking program
 // {{{
-// Purpose:	Produce daily totals of hours worked
+// Purpose:	Produce monthly totals of hours worked
 //
 // Creator:	Dan Gisselquist, Ph.D.
 //		Gisselquist Technology, LLC
@@ -36,7 +36,7 @@
 //
 // }}}
 __attribute__((unused))
-static const char *cpyright = "(C) 2022 Gisselquist Technology, LLC: " __FILE__;
+static const char *cpyright = "(C) 2024 Gisselquist Technology, LLC: " __FILE__;
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -61,25 +61,28 @@ const char	*daystr[] = {
 	"Saturday"
 };
 
-class	DAILYSHEET : public TIMECARD {
+class	TALLYSHEET : public TIMECARD {
 public:
-	time_t		m_last_start, m_today;
+	time_t		m_last_start, m_month;
 	bool		m_currently_working;
 	char		*m_fname, *m_name;
-	unsigned	m_sumunits, m_daily_s;
+	unsigned	m_sumunits, m_monthly_s, m_last_invoiced;
 	double		m_hourly_rate;
 
-	DAILYSHEET(void) {
+	TALLYSHEET(void) {
+		// {{{
 		m_last_start = 0;
 		m_currently_working = false;
-		m_today = get_midnight(time(NULL));
+		m_month = get_month(time(NULL));
 		m_fname = NULL;
 		m_name = NULL;
-		m_sumunits = m_daily_s = 0;
+		m_last_invoiced = m_sumunits = m_monthly_s = 0;
 		m_hourly_rate = 225.0;
 	}
+	// }}}
 
 	void	load(const char *fname, bool latex) {
+		// {{{
 		m_hourly_rate = 225.0;
 
 		if (m_fname)
@@ -93,10 +96,10 @@ public:
 		const	unsigned MXLEN=4096;
 		FILE		*fp;
 		char	*line;
-		time_t	thisday = 0, lnstart=0, lnstop=0;
+		time_t	thismonth = 0, lnstart=0, lnstop=0;
 
-		m_today = get_midnight(time(NULL));
-		m_sumunits = m_daily_s = 0;
+		m_month = get_month(time(NULL));
+		m_last_invoiced = m_sumunits = m_monthly_s = 0;
 
 		line = new char[MXLEN];
 		fp = fopen(m_fname, "r");
@@ -106,75 +109,91 @@ public:
 			} else if (strncasecmp(line, "project:", 8)==0) {
 			} else if ((strncasecmp(line, "invoice", 7)==0)
 				|| (strncasecmp(line, "billed",  6)==0)) {
-				printf("INVOICE\n");
+				if (m_monthly_s > 0) {
+					struct tm datev;
+					int nunits = (m_monthly_s+180)/60/6;
+
+					localtime_r(&thismonth, &datev);
+					monthlysum(&thismonth, nunits, latex);
+					m_sumunits  += nunits;
+					m_monthly_s = 0;
+
+					nunits = m_sumunits - m_last_invoiced;
+					printf("INVOICE -- %.1f\n", nunits / 10.0);
+					m_last_invoiced = m_sumunits;
+				} else
+					printf("INVOICE\n");
 			} else if (parse(line, lnstart, lnstop)) {
 				time_t		midnight;
 				if (lnstart > 24*3600) {
-					midnight = get_midnight(lnstart);
-					if (midnight != thisday) {
-						int nunits = (m_daily_s+180)/60/6;
-						if (m_daily_s > 0) {
+					midnight = get_month(lnstart);
+					if (midnight != thismonth) {
+						int nunits = (m_monthly_s+180)/60/6;
+						if (m_monthly_s > 0) {
 							struct tm datev;
-							localtime_r(&thisday, &datev);
-							dailysum(&thisday, nunits, latex);
+							localtime_r(&thismonth, &datev);
+							monthlysum(&thismonth, nunits, latex);
 							m_sumunits  += nunits;
-							m_daily_s = 0;
+							m_monthly_s = 0;
 						}
-						thisday = midnight;
+						thismonth = midnight;
 					}
 				}
 
-				m_daily_s += lnstop-lnstart;
+				m_monthly_s += lnstop-lnstart;
 			}
 		}
 		fclose(fp);
 
-		if (m_today != thisday) {
-			dailysum(&thisday, (m_daily_s+180)/360, latex);
-			m_sumunits  += (m_daily_s+180)/60/6;
-			m_daily_s = 0;
+		if (m_month != thismonth) {
+			monthlysum(&thismonth, (m_monthly_s+180)/360, latex);
+			m_sumunits  += (m_monthly_s+180)/60/6;
+			m_monthly_s = 0;
 		}
 
 		delete[] line;
 	}
+	// }}}
 
-	void	dailysum(time_t *date, int nunits, bool latex) const {
+	void	monthlysum(time_t *date, int nunits, bool latex) const {
+		// {{{
 		if (nunits <= 0)
 			return;
 		struct tm datev;
 		localtime_r(date, &datev);
 
 		if (latex) {
-		printf("\\Fee{%04d/%02d/%02d, %s}{%.2f}{%.1f}{%.2f}\n",
+		printf("\\Fee{%04d/%02d}{%.2f}{%.1f}{%.2f}\n",
 			datev.tm_year+1900,
 			datev.tm_mon+1,
-			datev.tm_mday,
-			daystr[datev.tm_wday],
 			m_hourly_rate,
 			nunits/10.,
 			m_hourly_rate * nunits/10.0
 			);
 		} else {
-		printf("%9s %04d/%02d/%02d: %4.1f\n",
-			daystr[datev.tm_wday],
+		printf("%04d/%02d: %4.1f\n",
 			datev.tm_year+1900,
 			datev.tm_mon+1,
-			datev.tm_mday,
 			nunits/10.);
 		}
 	}
+	// }}}
 
 	void	last(bool latex) {
-		if (m_daily_s > 0) {
-			dailysum(&m_today, (m_daily_s+180)/360, latex);
-			m_sumunits  += (m_daily_s+180)/60/6;
-			m_daily_s = 0;
+		// {{{
+		if (m_monthly_s > 0) {
+			monthlysum(&m_month, (m_monthly_s+180)/360, latex);
+			m_sumunits  += (m_monthly_s+180)/60/6;
+			m_monthly_s = 0;
+
+			printf("NOT-YET INVOICED -- %.1f\n", (m_sumunits - m_last_invoiced) / 10.0);
 		}
 	}
+	// }}}
 };
 
 int main(int argc, char **argv) {
-	DAILYSHEET	ds;
+	TALLYSHEET	ds;
 	bool		latex = false;
 
 	for(int argn=1; argn<argc; argn++) {

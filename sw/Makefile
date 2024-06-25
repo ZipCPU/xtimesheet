@@ -1,9 +1,9 @@
 ################################################################################
 ##
-## Filename: 	src/Makefile
-## {{{
-## Project:	Xtimesheet, a very simple text-based timesheet tracking program
+## Filename:	sw/Makefile
 ##
+## Project:	Xtimesheet, a very simple text-based timesheet tracking program
+## {{{
 ## Purpose:	Keeps track of hours performed on a daily basis
 ##
 ## Creator:	Dan Gisselquist, Ph.D.
@@ -11,10 +11,10 @@
 ##
 ################################################################################
 ## }}}
-## Copyright (C) 2017-2022, Gisselquist Technology, LLC
+## Copyright (C) 2017-2024, Gisselquist Technology, LLC
 ## {{{
 ## This program is free software (firmware): you can redistribute it and/or
-## modify it under the terms of  the GNU General Public License as published
+## modify it under the terms of the GNU General Public License as published
 ## by the Free Software Foundation, either version 3 of the License, or (at
 ## your option) any later version.
 ##
@@ -24,7 +24,7 @@
 ## for more details.
 ##
 ## You should have received a copy of the GNU General Public License along
-## with this program.  (It's in the $(ROOT)/doc directory.  Run make with no
+## with this program.  (It's in the $(ROOT)/doc directory, run make with no
 ## target there if the PDF file isn't present.)  If not, see
 ## <http://www.gnu.org/licenses/> for a copy.
 ## }}}
@@ -57,25 +57,26 @@ XTRAOBJ = $(addprefix $(OBJDIR)/,$(subst .c,.o,$(subst .cpp,.o,$(XTRASRC))))
 OBJECTS= $(addprefix $(OBJDIR)/,$(subst .c,.o,$(subst .cpp,.o,$(SOURCES))))
 
 APP=	xtimesheet
-PROGRAMS := $(APP) thisweek thismonth totalhrs byday
+PROGRAMS := $(APP) thisweek thismonth totalhrs byday bymonth
 .PHONY: all
 all:	$(addprefix $(BINDIR)/,$(PROGRAMS))
 
 .PHONY: install
 install: all
-	cp $(BINDIR)/$(APP) $(BINDIR)/thisweek $(BINDIR)/thismonth $(BINDIR)/totalhrs $(BINDIR)/byday $(HOME)/bin
+	cp $(BINDIR)/$(APP) $(BINDIR)/thisweek $(BINDIR)/thismonth $(BINDIR)/totalhrs $(BINDIR)/byday $(BINDIR)/bymonth $(HOME)/bin
 
 .PHONY: $(OBNAMES)
 $(OBJDIR)/%.o: %.cpp
 	$(mk-objdir)
 	$(CXX) $(CFLAGS) -c $< -o $@
 
-.PHONY: xtimesheet thisweek thismonth totalhrs byday
+.PHONY: xtimesheet thisweek thismonth totalhrs byday bymonth
 xtimesheet: $(BINDIR)/xtimesheet
 thisweek: $(BINDIR)/thisweek
 thismonth: $(BINDIR)/thismonth
 totalhrs: $(BINDIR)/totalhrs
 byday: $(BINDIR)/byday
+bymonth: $(BINDIR)/bymonth
 
 $(BINDIR)/$(APP):	$(OBJECTS)
 	$(mk-bindir)
@@ -90,6 +91,9 @@ $(BINDIR)/totalhrs: $(OBJDIR)/totalhrs.o $(OBJDIR)/timecard.o
 	$(mk-bindir)
 	$(CXX) $(LIBS) -o $@ $^ $(LIBS)
 $(BINDIR)/byday: $(OBJDIR)/byday.o $(OBJDIR)/timecard.o
+	$(mk-bindir)
+	$(CXX) $(LIBS) -o $@ $^ $(LIBS)
+$(BINDIR)/bymonth: $(OBJDIR)/bymonth.o $(OBJDIR)/timecard.o
 	$(mk-bindir)
 	$(CXX) $(LIBS) -o $@ $^ $(LIBS)
 $(OBJDIR)/xtimesheet.o: sm_splash.cpp gladef.h

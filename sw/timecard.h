@@ -1,9 +1,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Filename: 	timecard.h
-// {{{
-// Project:	Xtimesheet, a very simple text-based timesheet tracking program
+// Filename:	sw/timecard.h
 //
+// Project:	Xtimesheet, a very simple text-based timesheet tracking program
+// {{{
 // Purpose:	To define the data types used to store timesheet information
 //
 // Creator:	Dan Gisselquist, Ph.D.
@@ -11,10 +11,10 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 // }}}
-// Copyright (C) 2017-2022, Gisselquist Technology, LLC
+// Copyright (C) 2017-2024, Gisselquist Technology, LLC
 // {{{
 // This program is free software (firmware): you can redistribute it and/or
-// modify it under the terms of  the GNU General Public License as published
+// modify it under the terms of the GNU General Public License as published
 // by the Free Software Foundation, either version 3 of the License, or (at
 // your option) any later version.
 //
@@ -53,12 +53,15 @@ class	TIMECARD {
 public:
 	TIMECARD(void) {}
 
+	bool	istimecard(const char *fname);
 	bool	parse(const char *line, time_t &lnstart, time_t &lnstop);
 	void	log(const char *fname, time_t t_start, time_t t_stop);
 	void	note_start(const char *fname, time_t t_start);
 	time_t	get_midnight(const char *ln);
 	time_t	get_midnight(time_t when);
+	time_t	get_month(time_t when);	// Get first of month
 	bool	digitstr(const char *str, int len);
+	static	char	*trimtask(char *task_name);
 };
 
 #endif // TIMECARD_H

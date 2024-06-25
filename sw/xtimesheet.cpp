@@ -1,9 +1,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Filename: 	xtimesheet.cpp
-// {{{
-// Project:	Xtimesheet, a very simple text-based timesheet tracking program
+// Filename:	sw/xtimesheet.cpp
 //
+// Project:	Xtimesheet, a very simple text-based timesheet tracking program
+// {{{
 // Purpose:	This is the main program for a GUI managing automatic
 //		updates and changes to my hourly timesheet files.
 //
@@ -12,10 +12,10 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 // }}}
-// Copyright (C) 2017-2022, Gisselquist Technology, LLC
+// Copyright (C) 2017-2024, Gisselquist Technology, LLC
 // {{{
 // This program is free software (firmware): you can redistribute it and/or
-// modify it under the terms of  the GNU General Public License as published
+// modify it under the terms of the GNU General Public License as published
 // by the Free Software Foundation, either version 3 of the License, or (at
 // your option) any later version.
 //
@@ -108,8 +108,8 @@ public:
 	time_t		m_last_start, m_today;
 	bool		m_currently_working;
 	char		*m_fname, *m_name;
-	unsigned	m_sumunits, m_daily_s;
-	double		m_hourly_rate;
+	unsigned	m_sumunits, m_daily_s, m_invunits, m_allhrs;
+	double		m_hourly_rate, m_invamount;
 
 	// XTIMESHEET
 	// {{{
@@ -119,8 +119,9 @@ public:
 		m_today = get_midnight(time(NULL));
 		m_fname = NULL;
 		m_name = NULL;
-		m_sumunits = m_daily_s = 0;
+		m_sumunits = m_daily_s = m_allhrs = 0;
 		m_hourly_rate = 225.0;
+		m_invamount = 0.0;
 	}
 	// }}}
 
@@ -179,7 +180,9 @@ public:
 		time_t	thisday = 0, lnstart=0, lnstop=0;
 
 		m_today = get_midnight(time(NULL));
+		// Don't clear m_allhrs here.
 		m_sumunits = m_daily_s = 0;
+		m_invunits = 0;
 
 		line = new char[MXLEN];
 		fp = fopen(m_fname, "r");
@@ -202,6 +205,11 @@ public:
 						m_name[strlen(m_name)-1]='\0';
 				}
 				tbl_register_fname(m_name, m_fname);
+			} else if((strncasecmp(line, "invoice", 8)==0)
+				||(strncasecmp(line, "billed",  7)==0)) {
+				m_invunits += m_sumunits;
+				m_sumunits = 0;
+				m_invamount += (m_sumunits * m_hourly_rate)/10.0;
 			} else if (parse(line, lnstart, lnstop)) {
 				time_t		midnight;
 				if (lnstart > 24*3600) {
@@ -234,6 +242,13 @@ public:
 			reload();
 
 			m_currently_working = true;
+			if (m_last_start != 0) {
+				// Clear our total hourly count for the day
+				// on the first task start of any new day.
+				m_today = get_midnight(time(NULL));
+				if (m_last_start < m_today)
+					m_allhrs = 0;
+			}
 			time(&m_last_start);
 			TIMECARD::note_start(m_fname, m_last_start);
 		} else {
@@ -242,6 +257,7 @@ public:
 			m_currently_working = false;
 
 			m_daily_s += (now - m_last_start);
+			m_allhrs  += (now - m_last_start);
 			m_last_start = 0;
 		}
 	}
@@ -270,8 +286,9 @@ public:
 	Gtk::ApplicationWindow	*m_xts_main;
 	Gtk::ComboBoxText	*m_taskchoice;
 	Gtk::FileChooserButton	*m_taskfile;
-	Gtk::Entry		*m_totalcost, *m_today,
-				*m_sumhours, *m_hourlyrate;
+	Gtk::Entry		*m_totalcost, *m_prjtoday, *m_alltoday,
+				*m_prjhours, *m_hourlyrate,
+				*m_invhours, *m_invcost;
 	Gtk::ToggleButton	*m_working_btn;
 	Gtk::ProgressBar	*m_daily_prg;
 	Gtk::Image		*m_splash;
@@ -284,10 +301,13 @@ public:
 		m_xts_main   = NULL;
 		m_taskchoice = NULL;
 		m_taskfile   = NULL;
-		m_totalcost  = NULL;
-		m_today      = NULL;
-		m_sumhours   = NULL;
 		m_hourlyrate = NULL;
+		m_prjhours   = NULL;
+		m_totalcost  = NULL;
+		m_invhours   = NULL;
+		m_invcost    = NULL;
+		m_prjtoday   = NULL;
+		m_alltoday   = NULL;
 		m_working_btn= NULL;
 		m_daily_prg  = NULL;
 		m_terminate_now = false;
@@ -355,16 +375,24 @@ public:
 			sprintf(buf, "$ %.2f", m_xts->m_hourly_rate);
 			m_hourlyrate->set_text(buf);
 
-			sprintf(buf, "%.1f", (m_xts->m_sumunits+((m_xts->m_daily_s+180)/360)) / 10.0);
-			m_sumhours->set_text(buf);
+			sprintf(buf, "%.1f", (m_xts->m_invunits + m_xts->m_sumunits+((m_xts->m_daily_s+180)/360)) / 10.0);
+			m_prjhours->set_text(buf);
 
-			double	 v = m_xts->m_sumunits * m_xts->m_hourly_rate / 10.0;
+			// Same thing, but without the invoiced units
+			sprintf(buf, "%.1f", (m_xts->m_sumunits+((m_xts->m_daily_s+180)/360)) / 10.0);
+			m_invhours->set_text(buf);
+
+			double	 v = m_xts->m_invamount + (m_xts->m_sumunits * m_xts->m_hourly_rate / 10.0);
 			sprintf(buf, "%.2f", v);
 			m_totalcost->set_text(buf);
 
+			v = (m_xts->m_sumunits * m_xts->m_hourly_rate / 10.0);
+			sprintf(buf, "%.2f", v);
+			m_invcost->set_text(buf);
+
 			v = m_xts->m_daily_s / 3600.0;
 			sprintf(buf, "%.1f", v);
-			m_today->set_text(buf);
+			m_prjtoday->set_text(buf);
 		} else
 			m_taskfile->set_title("Select a timecard");
 
@@ -379,7 +407,7 @@ public:
 	void	tick(void) {
 		char	buf[128];
 		time_t	daily_s = m_xts->m_daily_s;
-		unsigned	sumunits;
+		unsigned	sumunits, allhrs = m_xts->m_allhrs;
 		double	f;
 
 
@@ -388,16 +416,22 @@ public:
 			return;
 		}
 
-		if (m_xts->m_currently_working)
+		if (m_xts->m_currently_working) {
 			daily_s = m_xts->m_daily_s + (time(NULL)-m_xts->m_last_start);
+			allhrs  = m_xts->m_allhrs  + (time(NULL)-m_xts->m_last_start);
+		}
 
 		sumunits = m_xts->m_sumunits + ((daily_s+180)/360);
 		sprintf(buf, "%.1f", sumunits / 10.0);
-		m_sumhours->set_text(buf);
+		m_prjhours->set_text(buf);
 
 		double	 v = sumunits * m_xts->m_hourly_rate / 10.0;
 		sprintf(buf, "%.2f", v);
 		m_totalcost->set_text(buf);
+
+		allhrs = ((allhrs+180)/360);
+		sprintf(buf, "%.1f", allhrs / 10.0);
+		m_alltoday->set_text(buf);
 
 
 		f = (double)daily_s; f = f / 8.0 / 3600.0;
@@ -409,7 +443,7 @@ public:
 
 		f = daily_s / 3600.0;
 		sprintf(buf, "%.1f", f);
-		m_today->set_text(buf);
+		m_prjtoday->set_text(buf);
 
 		if (m_xts->m_currently_working) {
 			unsigned hrs, mns, len;
@@ -481,6 +515,12 @@ public:
 			m_taskchoice->set_active(0);
 			
 		}
+
+		if (working) {
+			// Adjust the button's active time
+			tick();
+		}
+
 	}
 	// }}}
 
@@ -524,10 +564,6 @@ public:
 	// {{{
 	void	on_newfile(void) {
 		const char	 *new_fname;
-		char		cbuf[64];
-		const	char	PATTERN[] = "Project:";
-		const unsigned	nP = strlen(PATTERN);
-		FILE	*ftmp;
 		Glib::ustring	aux, cvt;
 
 		aux = m_taskfile->get_filename();
@@ -535,18 +571,7 @@ public:
 		new_fname = aux.c_str();
 
 		DBGPRINTF("NEW-FILE: %s\n", new_fname);
-		if (0 != access(new_fname, W_OK)) {
-			fprintf(stderr, "%s cannot be read\n", new_fname);
-		} else if (NULL == (ftmp = fopen(new_fname, "r"))) {
-			fprintf(stderr, "%s cannot be read\n", new_fname);
-		} else if (nP != fread(cbuf, sizeof(char), nP, ftmp)) { 
-			fclose(ftmp);
-			fprintf(stderr, "%s is not a valid time card\n", new_fname);
-		} else if (0 != strncasecmp(cbuf, PATTERN, strlen(PATTERN))) {
-			fclose(ftmp);
-			fprintf(stderr, "%s is not a valid time card\n", new_fname);
-		} else {
-			fclose(ftmp);
+		if (m_xts->istimecard(new_fname)) {
 			load(new_fname);
 		}
 	}
@@ -587,16 +612,9 @@ public:
 // printf("READ-CONFIG: cfg_file = %s\n", cfg_file);
 
 		while(fgets(cfg_task, sizeof(cfg_task), fcfg)) {
-			char	*tsk_file = cfg_task, *endp;
+			char	*tsk_file = TIMECARD::trimtask(cfg_task), *endp;
 
-			endp = &cfg_task[strlen(cfg_task)-1];
-			while(endp > cfg_task && isspace(*endp))
-				*endp-- = '\0';
-			while(*tsk_file && isspace(*tsk_file))
-				tsk_file++;
-			if (tsk_file[0] == '#' || tsk_file[0] == '*')
-				continue;
-			if (tsk_file[0] == '/' && tsk_file[1] == '/')
+			if ('\0' == tsk_file[0])
 				continue;
 
 			ftsk = NULL;
@@ -627,10 +645,24 @@ public:
 	// load
 	// {{{
 	void	load(const char *fname) {
+		bool	working = m_xts->m_currently_working;
+
+		if (working) {
+			// Stop the time card, write a close task to it
+			m_xts->toggle();
+		}
+
 		DBGPRINTF("LOAD()::CALLING LOAD: %s\n", fname);
 		m_xts->load(fname);
 		DBGPRINTF("LOAD()::CALLING LOAD::SET-VALUES\n");
 		set_values();
+
+		if (working) {
+			// Restart the task
+			m_xts->toggle();
+			// Update our time counter
+			tick();
+		}
 	}
 	// }}}
 };
@@ -682,7 +714,7 @@ void	sig_handler(int v) {
 // usage
 // {{{
 void usage(void) {
-	fprintf(stderr, "USAGE:  xtimesheet <timesheet.txt>\n"
+	fprintf(stderr, "USAGE:  xtimesheet [<timesheet.txt>]\n"
 "\tor\n"
 "\txtimesheet -p project_name -r rate\n\n"
 "\twhere:\n"
@@ -775,12 +807,42 @@ int main(int argc, char **argv) {
 		// }}}
 	}
 
-	if ((argc < 2)||(strcasecmp(argv[1], "--help")==0)) {
+	if ((argc >= 2)||(strcasecmp(argv[1], "--help")==0)) {
 		usage();
 		exit(-1);
 	} 
-	
-	if (strlen(file_name) == 0) {
+
+	if (argc == 1) {
+		FILE	*fcfg;
+		char	*home, cfg_file[128], cfg_task[256], *tsk_file = NULL;
+
+		home = getenv("HOME");
+		if (!home) {
+			fprintf(stderr, "$HOME undefined!\n");
+			exit(EXIT_FAILURE);
+		} strcpy(cfg_file, home);
+		strcat(cfg_file, "/.xtimesheet");
+		fcfg = fopen(cfg_file, "r");
+		do {
+			if (!fgets(cfg_task, sizeof(cfg_task), fcfg))
+				break;
+			tsk_file = TIMECARD::trimtask(cfg_task);
+			if (!tsk_file)
+				break;
+			if (tsk_file[0] && 0 == access(tsk_file, R_OK))
+				break;
+			tsk_file[0] = '\0';
+
+			// If we get this far, the file's not empty and we
+			// don't have a valid task filename yet.
+		} while(1);
+		fclose(fcfg);
+
+		if (!tsk_file || '\0' == tsk_file[0]) {
+			fprintf(stderr, "No valid tasks given, no default task\n");
+			exit(EXIT_FAILURE);
+		} strcpy(file_name, tsk_file);
+	} else if (strlen(file_name) == 0) {
 		strcpy(file_name, argv[1]);
 	}
 	char* ext = get_file_extension(file_name);
@@ -826,10 +888,13 @@ int main(int argc, char **argv) {
 	builder->get_widget("xts_main",    ad->m_xts_main);
 	builder->get_widget("taskchoice",  ad->m_taskchoice);
 	builder->get_widget("taskfile",    ad->m_taskfile);
-	builder->get_widget("totalcost",   ad->m_totalcost);
-	builder->get_widget("today",       ad->m_today);
-	builder->get_widget("sumhours",    ad->m_sumhours);
 	builder->get_widget("hourlyrate",  ad->m_hourlyrate);
+	builder->get_widget("prjhours",    ad->m_prjhours);
+	builder->get_widget("totalcost",   ad->m_totalcost);
+	builder->get_widget("invhours",    ad->m_invhours);
+	builder->get_widget("invcost",     ad->m_invcost);
+	builder->get_widget("prjtoday",    ad->m_prjtoday);
+	builder->get_widget("alltoday",    ad->m_alltoday);
 	builder->get_widget("working_btn", ad->m_working_btn);
 	builder->get_widget("daily_prg",   ad->m_daily_prg);
 	builder->get_widget("splash",      ad->m_splash);

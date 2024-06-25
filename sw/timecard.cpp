@@ -1,9 +1,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Filename: 	timecard.cpp
-// {{{
-// Project:	Xtimesheet, a very simple text-based timesheet tracking program
+// Filename:	sw/timecard.cpp
 //
+// Project:	Xtimesheet, a very simple text-based timesheet tracking program
+// {{{
 // Purpose:	This file supports the non-GUI portions of reading timesheets.
 //		Indeed, the goal of this file is to support the reading and
 //	comprehension of the timesheets themselves.
@@ -13,10 +13,10 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 // }}}
-// Copyright (C) 2017-2022, Gisselquist Technology, LLC
+// Copyright (C) 2017-2024, Gisselquist Technology, LLC
 // {{{
 // This program is free software (firmware): you can redistribute it and/or
-// modify it under the terms of  the GNU General Public License as published
+// modify it under the terms of the GNU General Public License as published
 // by the Free Software Foundation, either version 3 of the License, or (at
 // your option) any later version.
 //
@@ -44,14 +44,44 @@ static const char *cpyright = "(C) 2022 Gisselquist Technology, LLC: " __FILE__;
 
 const bool	DEBUG = false;
 
+bool	TIMECARD::istimecard(const char *fname) {
+	// {{{
+	char		cbuf[64];
+	const	char	PATTERN[] = "Project:";
+	const unsigned	nP = strlen(PATTERN);
+	FILE	*ftmp;
+
+	if (0 != access(fname, W_OK)) {
+		fprintf(stderr, "%s cannot be read\n", fname);
+		return	false;
+	} else if (NULL == (ftmp = fopen(fname, "r"))) {
+		fprintf(stderr, "%s cannot be read\n", fname);
+		return	false;
+	} else if (nP != fread(cbuf, sizeof(char), nP, ftmp)) { 
+		fclose(ftmp);
+		fprintf(stderr, "%s is not a valid time card\n", fname);
+		return	false;
+	} else if (0 != strncasecmp(cbuf, PATTERN, strlen(PATTERN))) {
+		fclose(ftmp);
+		fprintf(stderr, "%s is not a valid time card\n", fname);
+		return	false;
+	} fclose(ftmp);
+
+	return true;
+}
+// }}}
+
 bool	TIMECARD::digitstr(const char *str, int len) {
+	// {{{
 	for(int i=0; i<len; i++)
 		if (!isdigit(str[i]))
 			return false;
 	return true;
 }
+// }}}
 
 time_t	TIMECARD::get_midnight(const char *ln) {
+	// {{{
 	struct	tm	datev;
 	unsigned	v;
 	const	char	*ptr = ln;
@@ -78,8 +108,10 @@ time_t	TIMECARD::get_midnight(const char *ln) {
 
 	return mktime(&datev);
 }
+// }}}
 
 time_t	TIMECARD::get_midnight(time_t when) {
+	// {{{
 	struct	tm	datev;
 	localtime_r(&when, &datev);
 
@@ -103,8 +135,39 @@ time_t	TIMECARD::get_midnight(time_t when) {
 
 	return mktime(&datev);
 }
+// }}}
+
+time_t	TIMECARD::get_month(time_t when) {
+	// {{{
+	struct	tm	datev;
+	localtime_r(&when, &datev);
+
+	/*
+	printf("1. LOCALTIME: %04d/%02d/%02d %02d:%02d:%02d --> %ld (%ld)\n",
+		datev.tm_year+1900, datev.tm_mon+1, datev.tm_mday,
+		datev.tm_hour, datev.tm_min, datev.tm_sec,
+		mktime(&datev), mktime(&datev)-when);
+	*/
+	datev.tm_hour = 0;
+	datev.tm_min = 0;
+	datev.tm_sec = 0;
+	datev.tm_isdst = 0;
+	//
+	datev.tm_mday = 1;
+
+	/*
+	printf("2. LOCALTIME: %04d/%02d/%02d %02d:%02d:%02d --> %ld (%ld)\n",
+		datev.tm_year+1900, datev.tm_mon+1, datev.tm_mday,
+		datev.tm_hour, datev.tm_min, datev.tm_sec,
+		mktime(&datev), mktime(&datev)-when);
+	*/
+
+	return mktime(&datev);
+}
+// }}}
 
 bool	TIMECARD::parse(const char *line, time_t &lnstart, time_t &lnstop) {
+	// {{{
 	if ((digitstr(line, 4))&&(line[4] == '/')
 		&&(digitstr(&line[5], 2))&&(line[7] == '/')
 		&&(digitstr(&line[8], 2))&&(isspace(line[10]))
@@ -251,8 +314,10 @@ bool	TIMECARD::parse(const char *line, time_t &lnstart, time_t &lnstop) {
 
 	return false;
 }
+// }}}
 
 void	TIMECARD::log(const char *fname, time_t t_start, time_t t_stop) {
+	// {{{
 	FILE	*fp;
 	struct	tm	tp_start, tp_stop;
 	double	hrs;
@@ -285,8 +350,10 @@ void	TIMECARD::log(const char *fname, time_t t_start, time_t t_stop) {
 
 	fclose(fp);
 }
+// }}}
 
 void	TIMECARD::note_start(const char *fname, time_t t_start) {
+	// {{{
 	FILE	*fp;
 	struct	tm	tp_start;
 
@@ -300,5 +367,38 @@ void	TIMECARD::note_start(const char *fname, time_t t_start) {
 
 	fclose(fp);
 }
+// }}}
 
+char	*TIMECARD::trimtask(char *task_name) {
+	// {{{
+	if (!task_name)
+		return NULL;
 
+	char	*ptr = task_name, *task = task_name;
+
+	// Clear any comments from the end of the line
+	// {{{
+	if (NULL != (ptr = strchr(task, '#')))
+		*ptr = '\0';
+	if (NULL != (ptr = strchr(task, '/'))
+			&& (ptr[0] == '/'))
+		*ptr = '\0';
+	// }}}
+
+	// Now grab the first token only
+	// {{{
+	ptr = strtok(task_name, " \t\n\r");
+	// Can't use strcpy, since the strings may well overlap
+	// !! strcpy(task_name, ptr);
+	if (ptr != task_name) {
+		char	*s = ptr, *d = task_name;
+
+		while(*s)
+			*d++ = *s++;
+		*d = '\0';
+	}
+	// }}}
+
+	return task;
+}
+// }}}

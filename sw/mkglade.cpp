@@ -1,9 +1,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Filename: 	mkglade.cpp
-// {{{
-// Project:	Xtimesheet, a very simple text-based timesheet tracking program
+// Filename:	sw/mkglade.cpp
 //
+// Project:	Xtimesheet, a very simple text-based timesheet tracking program
+// {{{
 // Purpose:	Turns a glade (xml) file into a C-source code file that can then
 //		be compiled into an application, so the application doesn't need
 //	to search to find its resource files, but rather is an independent and
@@ -14,10 +14,10 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 // }}}
-// Copyright (C) 2017-2022, Gisselquist Technology, LLC
+// Copyright (C) 2017-2024, Gisselquist Technology, LLC
 // {{{
 // This program is free software (firmware): you can redistribute it and/or
-// modify it under the terms of  the GNU General Public License as published
+// modify it under the terms of the GNU General Public License as published
 // by the Free Software Foundation, either version 3 of the License, or (at
 // your option) any later version.
 //
